@@ -36,6 +36,7 @@ public class ResourceRelationDTO {
     private String relatedResourceName;
     private String relatedResourceRelease;
     private String identifier;
+    private String type;
 
     ResourceRelationDTO(){}
 
@@ -43,5 +44,6 @@ public class ResourceRelationDTO {
         relatedResourceName = relation.getSlaveResource().getName();
         relatedResourceRelease = relation.getSlaveResource().getRelease().getName();
         identifier = relation.buildIdentifer();
+        type = relation.getResourceRelationType().getResourceTypeB().getName();
     }
 }
