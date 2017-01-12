@@ -22,9 +22,12 @@ package ch.mobi.itc.mobiliar.rest.resources;
 
 import ch.mobi.itc.mobiliar.rest.dtos.*;
 import ch.puzzle.itc.mobiliar.business.database.control.Constants;
+import ch.puzzle.itc.mobiliar.business.deploy.boundary.DeploymentService;
+import ch.puzzle.itc.mobiliar.business.deploy.entity.DeploymentEntity;
 import ch.puzzle.itc.mobiliar.business.environment.boundary.ContextLocator;
 import ch.puzzle.itc.mobiliar.business.property.boundary.PropertyEditor;
 import ch.puzzle.itc.mobiliar.business.releasing.boundary.ReleaseLocator;
+import ch.puzzle.itc.mobiliar.business.releasing.control.ReleaseMgmtService;
 import ch.puzzle.itc.mobiliar.business.releasing.entity.ReleaseEntity;
 import ch.puzzle.itc.mobiliar.business.resourcegroup.boundary.ResourceGroupLocator;
 import ch.puzzle.itc.mobiliar.business.resourcegroup.boundary.ResourceLocator;
@@ -44,6 +47,7 @@ import com.wordnik.swagger.annotations.ApiParam;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
 import java.util.*;
 
 @RequestScoped
@@ -58,6 +62,12 @@ public class ResourcesRest {
 
     @Inject
     ReleaseLocator releaseLocator;
+
+    @Inject
+    ReleaseMgmtService releaseMgmtService;
+
+    @Inject
+    DeploymentService deploymentService;
 
     @Inject
     ResourceGroupLocator resourceGroupLocator;
@@ -142,11 +152,46 @@ public class ResourcesRest {
     public ReleaseDTO getResource(@PathParam("resourceGroupName") String resourceGroupName,
                                   @PathParam("releaseName") String releaseName,
                                   @QueryParam("env") @DefaultValue("Global") String environment,
-                                  @QueryParam("appsOnly") boolean appsOnly) throws ValidationException {
+                                  @QueryParam("type") String resourceType) throws ValidationException {
         ResourceEntity resourceByRelease = resourceLocator.getResourceByGroupNameAndRelease(resourceGroupName, releaseName);
         return new ReleaseDTO(resourceByRelease, resourceRelations.getResourceRelations(resourceGroupName,
-                releaseName, appsOnly), resourceProperties.getResourceProperties(resourceGroupName, releaseName,
+                releaseName, resourceType), resourceProperties.getResourceProperties(resourceGroupName, releaseName,
                 environment));
+    }
+
+    @Path("/{resourceGroupName}/{releaseName}/appversions/")
+    @GET
+    @ApiOperation(value = "Get application with version for a specific resourceGroup, release and context(s)")
+    public Response getAppplicationsWithVersionForRelease(@PathParam("resourceGroupName") String resourceGroupName,
+                                                          @PathParam("releaseName") String releaseName,
+                                                          @QueryParam("context") List<Integer> contextIds) throws ValidationException {
+        ResourceEntity appServer = resourceLocator.getResourceByNameAndReleaseWithRelations(resourceGroupName, releaseName);
+        List<AppWithVersionDTO> apps = new ArrayList<>();
+        List<DeploymentEntity.ApplicationWithVersion> appVersions = deploymentService.getVersions(appServer, contextIds, appServer.getRelease());
+        for (DeploymentEntity.ApplicationWithVersion appVersion : appVersions) {
+            apps.add(new AppWithVersionDTO(appVersion.getApplicationName(), appVersion.getVersion()));
+        }
+        return Response.ok(apps).build();
+
+    }
+
+    @Path("/{resourceGroupName}/releases/")
+    @GET
+    @ApiOperation(value = "Get deployable releases for a specific resourceGroup")
+    public Response getDeployableReleasesForResourceGroup(@PathParam("resourceGroupName") String resourceGroupName) throws ValidationException {
+
+        ResourceGroupEntity group = resourceGroupLocator.getResourceGroupByName(resourceGroupName);
+        if (group == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+
+        List<ReleaseDTO> releases = new ArrayList<>();
+        List<ReleaseEntity> deployableReleases = releaseMgmtService.getDeployableReleasesForResourceGroup(group);
+        for (ReleaseEntity deployableRelease : deployableReleases) {
+            releases.add(new ReleaseDTO(deployableRelease));
+        }
+        return Response.ok(releases).build();
+
     }
 
     // Fuer JavaBatch Monitor

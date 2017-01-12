@@ -35,6 +35,7 @@ import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.QueryParam;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,6 +50,9 @@ public class ResourceRelationsRest {
     @PathParam("releaseName")
     String releaseName;
 
+    @QueryParam("type")
+    String resourceType;
+
     @Inject
     PropertyEditor propertyEditor;
 
@@ -61,15 +65,15 @@ public class ResourceRelationsRest {
     @GET
     @ApiOperation(value = "Get all relations of the current resource")
     public List<ResourceRelationDTO> getResourceRelations() throws ValidationException {
-        return getResourceRelations(resourceGroupName, releaseName, false);
+        return getResourceRelations(resourceGroupName, releaseName, resourceType);
     }
 
-    List<ResourceRelationDTO> getResourceRelations(String resourceGroupName, String releaseName, boolean applicationsOnly) throws ValidationException {
+    List<ResourceRelationDTO> getResourceRelations(String resourceGroupName, String releaseName, String resourceType) throws ValidationException {
         ResourceEntity resource = resourceLocator.getResourceByNameAndReleaseWithRelations(resourceGroupName, releaseName);
         List<ResourceRelationDTO> resourceRelations = new ArrayList<>();
         for (ConsumedResourceRelationEntity relation : resource.getConsumedMasterRelations()) {
-            if (applicationsOnly && !relation.getResourceRelationType().getResourceTypeB().isApplicationResourceType()) {
-                    continue;
+            if (resourceType != null && !relation.getResourceRelationType().getResourceTypeB().getName().equals(resourceType)) {
+                continue;
             }
             resourceRelations.add(new ResourceRelationDTO(relation));
         }

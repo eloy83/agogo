@@ -60,4 +60,9 @@ public class ReleaseDTO {
         this.relations = relations;
         this.properties = properties;
     }
+
+    public ReleaseDTO(ReleaseEntity release) {
+        this.id = release.getId();
+        this.release = release.getName();
+    }
 }
