@@ -25,6 +25,7 @@ import ch.puzzle.itc.mobiliar.business.database.control.Constants;
 import ch.puzzle.itc.mobiliar.business.deploy.boundary.DeploymentService;
 import ch.puzzle.itc.mobiliar.business.deploy.entity.DeploymentEntity;
 import ch.puzzle.itc.mobiliar.business.environment.boundary.ContextLocator;
+import ch.puzzle.itc.mobiliar.business.generator.control.extracted.ResourceDependencyResolverService;
 import ch.puzzle.itc.mobiliar.business.property.boundary.PropertyEditor;
 import ch.puzzle.itc.mobiliar.business.releasing.boundary.ReleaseLocator;
 import ch.puzzle.itc.mobiliar.business.releasing.control.ReleaseMgmtService;
@@ -84,6 +85,9 @@ public class ResourcesRest {
     @Inject
     ResourcePropertiesRest resourceProperties;
 
+    @Inject
+    ResourceDependencyResolverService resourceDependencyResolverService;
+
     /*
      *  Fuer JavaBatch Monitor
      */
@@ -113,8 +117,25 @@ public class ResourcesRest {
     public List<ResourceDTO> getResources(
             @ApiParam(value = "a resource type, the list should be filtered by") @QueryParam("type") String type) {
         List<ResourceDTO> result = new ArrayList<>();
-        for (ResourceGroupEntity resourceGroupEntity : resourceGroupLocator.getResourceGroups()) {
-            if (type == null || hasResourceTypeName(type, resourceGroupEntity)) {
+        // used by angular
+        if (type != null) {
+            // TODO my favorites only
+            List<Integer> myAmw = Collections.EMPTY_LIST;
+            List<ResourceGroupEntity> groupsForType = resourceGroupLocator.getGroupsForType(type, myAmw, true, true);
+            for (ResourceGroupEntity resourceGroupEntity : groupsForType) {
+                if (hasResourceTypeName(type, resourceGroupEntity)) {
+                    Set<ResourceEntity> resources = resourceGroupEntity.getResources();
+                    List<ReleaseDTO> releases = new ArrayList<>();
+                    for (ResourceEntity resource : resources) {
+                        if (resource != null && resource.getRelease() != null) {
+                            releases.add(new ReleaseDTO(resource, null, null));
+                        }
+                    }
+                    result.add(new ResourceDTO(resourceGroupEntity, releases));
+                }
+            }
+        } else {
+            for (ResourceGroupEntity resourceGroupEntity : resourceGroupLocator.getResourceGroups()) {
                 Set<ResourceEntity> resources = resourceGroupEntity.getResources();
                 List<ReleaseDTO> releases = new ArrayList<>();
                 for (ResourceEntity resource : resources) {
@@ -192,6 +213,19 @@ public class ResourcesRest {
         }
         return Response.ok(releases).build();
 
+    }
+
+    @Path("/{resourceGroupName}/releases/most-relevant/")
+    @GET
+    @ApiOperation(value = "Get most relevant release for a specific resourceGroup")
+    public Response getMostRelevantReleaseForResourceGroup(@PathParam("resourceGroupName") String resourceGroupName) {
+        ResourceGroupEntity group = resourceGroupLocator.getResourceGroupByName(resourceGroupName);
+        if (group == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        SortedSet<ReleaseEntity> deployableReleases = new TreeSet(releaseMgmtService.getDeployableReleasesForResourceGroup(group));
+        ReleaseDTO mostRelevant = new ReleaseDTO(resourceDependencyResolverService.findMostRelevantRelease(deployableReleases, null));
+        return Response.ok(mostRelevant).build();
     }
 
     // Fuer JavaBatch Monitor
